@@ -37,6 +37,29 @@ Install everything below **before Week 1**. The fellowship moves fast and you do
 | **Docker**            | 24+               | Nitro devnode for local Arbitrum testing |
 | **Code editor**       | —                 | We recommend **Cursor** or VS Code       |
 
+### Install Foundry
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+```
+In a new terminal
+
+```bash
+foundryup
+```
+
+### Install Rust
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+check instalation
+
+```bash
+rustc --version
+cargo --version
+rustup --version
+```
+
 ### Rust & Stylus Targets (needed from Week 3)
 
 After installing Rust, add the WASM compilation target and the `cargo-stylus` CLI:
