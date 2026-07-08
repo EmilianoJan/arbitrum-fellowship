@@ -132,3 +132,14 @@ forge create src/SimpleStorage.sol:SimpleStorage \
 ```
 
 > **Warning**: Never commit private keys. Use environment variables or a keystore for real deployments.
+
+
+
+
+## Cheat Sheet
+
+npx hardhat compile -> Compile contract
+
+npx hardhat node -> Start node in local network
+
+npx hardhat ignition deploy ./ignition/modules/SimpleStorage.ts --network localhost -> Deploy in local network
