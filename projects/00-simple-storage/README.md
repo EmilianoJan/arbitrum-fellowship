@@ -135,11 +135,3 @@ forge create src/SimpleStorage.sol:SimpleStorage \
 
 
 
-
-## Cheat Sheet
-
-npx hardhat compile -> Compile contract
-
-npx hardhat node -> Start node in local network
-
-npx hardhat ignition deploy ./ignition/modules/SimpleStorage.ts --network localhost -> Deploy in local network
