@@ -1,6 +1,10 @@
+# Definitions
+
+**wei**: Minimal unit of ETH (1 wei = 10^(-18) ETH)
 
 
-## Cheat Sheet
+
+# Cheat Sheet
 
 npx hardhat compile -> Compile contract
 
@@ -22,11 +26,19 @@ npx hardhat
 
 **msg.sender** : Address of the account performing an action with the contract.
 
-
+**_mint(msg.sender, msg.value)** : Aumenta el balance de la cuenta destino
 
 # Useful lines of code
 
 const [owner, otherAccount] = await hre.viem.getWalletClients();  // Gets two account addresses (useful to simulate two or more actors)
+
+
+require (*condition*, *msg*) ; // The condition must be meet, if not the execution is cancel. If the condition is 'False', breaks the execution of the contract.  All the gas before the *require* is computed. 
+
+
+Para transferir un monto a un usuario:
+(bool sent, ) = payable(owner()).call{value: amount}("");
+require(sent, "Transfer failed"); // If the transfer failed, all changes in the function are reverted. (For example if the contract has a *withdrawn* flag, that was previously change to 'True', if any *require* statement is false, withdrawn will change to 'False' (the original state) ).
 
 
 

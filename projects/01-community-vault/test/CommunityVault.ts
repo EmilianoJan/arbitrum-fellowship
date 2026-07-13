@@ -157,6 +157,27 @@ describe("CommunityVault", function () {
         "OwnableUnauthorizedAccount"
       );
     });
+
+
+    it("Should revert when non-owner tries to withdraw after goal is met", async function () {
+      const { vault, goal, otherAccount, deadline } = await loadFixture(deployVaultFixture);
+
+      const vaultAsOtherAccount = await hre.viem.getContractAt(
+        "CommunityVault",
+        vault.address,
+        { walletClient: otherAccount }
+      );
+
+      await vaultAsOtherAccount.write.contribute([], { value: goal });
+
+      await time.increaseTo(deadline + 1n);
+
+      await expectRevertWith(
+        vaultAsOtherAccount.write.withdraw(),
+        "OwnableUnauthorizedAccount"
+      );
+    });
+
   });
 
   describe("Refunds", function () {
