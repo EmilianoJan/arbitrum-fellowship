@@ -3,18 +3,15 @@ import hre from "hardhat";
 
 async function main() {
   const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = BigInt(currentTimestampInSeconds + 60);
+  const deadline = BigInt(currentTimestampInSeconds + 24 * 60 * 60);
+  const goal = parseEther("2");
 
-  const lockedAmount = parseEther("0.001");
-
-  const lock = await hre.viem.deployContract("Lock", [unlockTime], {
-    value: lockedAmount,
-  });
+  const vault = await hre.viem.deployContract("CommunityVault", [goal, deadline]);
 
   console.log(
-    `Lock with ${formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`
+    `CommunityVault with goal ${formatEther(
+      goal
+    )} ETH and deadline ${deadline} deployed to ${vault.address}`
   );
 }
 
