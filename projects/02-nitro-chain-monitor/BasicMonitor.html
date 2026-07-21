@@ -153,7 +153,7 @@
 
 		.metrics {
 			display: grid;
-			grid-template-columns: repeat(5, minmax(130px, 1fr));
+			grid-template-columns: repeat(6, minmax(130px, 1fr));
 			gap: 10px;
 		}
 
@@ -455,6 +455,10 @@
 					<div class="value" id="mL2Gas">-</div>
 				</div>
 				<div class="metric">
+					<div class="name">Gas used per block (Mgas)</div>
+					<div class="value" id="mGasUsed">-</div>
+				</div>
+				<div class="metric">
 					<div class="name">Block fill (%)</div>
 					<div class="value" id="mFill">-</div>
 				</div>
@@ -475,6 +479,10 @@
 				<article class="chart-card">
 					<h3 class="chart-title">L1 base fee (gwei)</h3>
 					<svg id="chartL1Fee" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">Gas used per block (Mgas)</h3>
+					<svg id="chartGasUsed" class="spark" viewBox="0 0 420 120"></svg>
 				</article>
 				<article class="chart-card">
 					<h3 class="chart-title">Block fill (%)</h3>
@@ -500,6 +508,7 @@
 							<th>L1 block</th>
 							<th>L1 fee gwei</th>
 							<th>L2 gas gwei</th>
+							<th>Gas used Mgas</th>
 							<th>Fill %</th>
 						</tr>
 					</thead>
@@ -565,10 +574,12 @@
 			mL1Block: document.getElementById("mL1Block"),
 			mL1Fee: document.getElementById("mL1Fee"),
 			mL2Gas: document.getElementById("mL2Gas"),
+			mGasUsed: document.getElementById("mGasUsed"),
 			mFill: document.getElementById("mFill"),
 			chartL2Block: document.getElementById("chartL2Block"),
 			chartL1Block: document.getElementById("chartL1Block"),
 			chartL1Fee: document.getElementById("chartL1Fee"),
+			chartGasUsed: document.getElementById("chartGasUsed"),
 			chartFill: document.getElementById("chartFill"),
 			phaseSummary: document.getElementById("phaseSummary"),
 			samplesBody: document.getElementById("samplesBody")
@@ -670,6 +681,8 @@
 				fillPct = Number((gasUsed * 10000n) / gasLimit) / 100;
 			}
 
+			const gasUsedMgas = gasUsed !== null ? Number(gasUsed) / 1e6 : null;
+
 			const sample = {
 				id: state.seq++,
 				ts: new Date().toISOString(),
@@ -679,6 +692,7 @@
 				l1Block: l1Block ? Number(l1Block) : null,
 				l1BaseFeeWei: l1BaseFeeWei ? l1BaseFeeWei.toString() : null,
 				l2GasWei: l2GasWei ? l2GasWei.toString() : null,
+				gasUsedMgas,
 				blockFillPct: fillPct
 			};
 
@@ -793,6 +807,7 @@
 					'<td>' + (s.l1Block ?? "-") + '</td>',
 					'<td>' + l1FeeGwei + '</td>',
 					'<td>' + l2GasGwei + '</td>',
+					'<td>' + (typeof s.gasUsedMgas === "number" ? s.gasUsedMgas.toFixed(4) : "-") + '</td>',
 					'<td>' + (typeof s.blockFillPct === "number" ? s.blockFillPct.toFixed(2) : "-") + '</td>',
 					'</tr>'
 				].join("");
@@ -808,6 +823,7 @@
 				els.mL1Block.textContent = "-";
 				els.mL1Fee.textContent = "-";
 				els.mL2Gas.textContent = "-";
+				els.mGasUsed.textContent = "-";
 				els.mFill.textContent = "-";
 				return;
 			}
@@ -819,6 +835,9 @@
 				: "-";
 			els.mL2Gas.textContent = latest.l2GasWei
 				? formatUnits(BigInt(latest.l2GasWei), 9, 6)
+				: "-";
+			els.mGasUsed.textContent = typeof latest.gasUsedMgas === "number"
+				? latest.gasUsedMgas.toFixed(4)
 				: "-";
 			els.mFill.textContent = typeof latest.blockFillPct === "number"
 				? latest.blockFillPct.toFixed(2)
@@ -834,6 +853,7 @@
 				windowSamples,
 				(s) => (s.l1BaseFeeWei ? Number(BigInt(s.l1BaseFeeWei)) / 1e9 : null)
 			);
+			renderSparkline(els.chartGasUsed, windowSamples, (s) => s.gasUsedMgas);
 			renderSparkline(els.chartFill, windowSamples, (s) => s.blockFillPct);
 		}
 
@@ -919,6 +939,7 @@
 				"l1_block",
 				"l1_base_fee_wei",
 				"l2_gas_wei",
+				"gas_used_mgas",
 				"block_fill_pct"
 			].join(",");
 
@@ -931,6 +952,7 @@
 				s.l1Block ?? "",
 				s.l1BaseFeeWei ?? "",
 				s.l2GasWei ?? "",
+				s.gasUsedMgas ?? "",
 				s.blockFillPct ?? ""
 			].join(","));
 
