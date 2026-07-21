@@ -153,7 +153,7 @@
 
 		.metrics {
 			display: grid;
-			grid-template-columns: repeat(7, minmax(130px, 1fr));
+			grid-template-columns: repeat(8, minmax(130px, 1fr));
 			gap: 10px;
 		}
 
@@ -464,6 +464,10 @@
 					<div class="value" id="mTxCount">-</div>
 				</div>
 				<div class="metric">
+					<div class="name">L2 to L1 bridge</div>
+					<div class="value" id="mBridgeSendCount">-</div>
+				</div>
+				<div class="metric">
 					<div class="name">Block fill (%)</div>
 					<div class="value" id="mFill">-</div>
 				</div>
@@ -494,6 +498,10 @@
 					<svg id="chartTxCount" class="spark" viewBox="0 0 420 120"></svg>
 				</article>
 				<article class="chart-card">
+					<h3 class="chart-title">L2 to L1 bridge</h3>
+					<svg id="chartBridge" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
 					<h3 class="chart-title">Block fill (%)</h3>
 					<svg id="chartFill" class="spark" viewBox="0 0 420 120"></svg>
 				</article>
@@ -513,6 +521,7 @@
 						<tr>
 							<th>Phase</th>
 							<th>Time</th>
+							<th>Hash</th>
 							<th>L2 block</th>
 							<th>L1 block</th>
 							<th>L1 fee gwei</th>
@@ -553,8 +562,8 @@
 			},
             mainnet: {
 				name: "Arbitrum One (Mainnet)",
-				l2Rpc: "https://ethereum-rpc.publicnode.com",
-				l1Rpc: "https://arb1.arbitrum.io/rpc"
+				l2Rpc: "https://arb1.arbitrum.io/rpc",
+				l1Rpc: "https://ethereum-rpc.publicnode.com"
 			}
 		};
 
@@ -591,16 +600,35 @@
 			mL2Gas: document.getElementById("mL2Gas"),
 			mGasUsed: document.getElementById("mGasUsed"),
 			mTxCount: document.getElementById("mTxCount"),
+			mBridgeSendCount: document.getElementById("mBridgeSendCount"),
 			mFill: document.getElementById("mFill"),
 			chartL2Block: document.getElementById("chartL2Block"),
 			chartL1Block: document.getElementById("chartL1Block"),
 			chartL1Fee: document.getElementById("chartL1Fee"),
 			chartGasUsed: document.getElementById("chartGasUsed"),
 			chartTxCount: document.getElementById("chartTxCount"),
+			chartBridge: document.getElementById("chartBridge"),
 			chartFill: document.getElementById("chartFill"),
 			phaseSummary: document.getElementById("phaseSummary"),
 			samplesBody: document.getElementById("samplesBody")
 		};
+
+		function parseRpcNumber(value) {
+			if (value === null || value === undefined) {
+				return null;
+			}
+			if (typeof value === "number") {
+				return Number.isFinite(value) ? value : null;
+			}
+			if (typeof value === "string") {
+				if (value.startsWith("0x") || value.startsWith("0X")) {
+					return Number(BigInt(value));
+				}
+				const parsed = Number(value);
+				return Number.isFinite(parsed) ? parsed : null;
+			}
+			return null;
+		}
 
 		function setStatus(text, mode) {
 			els.status.textContent = "Status: " + text;
@@ -711,6 +739,10 @@
 			const txCount = latestBlock && Array.isArray(latestBlock.transactions)
 				? latestBlock.transactions.length
 				: null;
+			const bridgeSendCount = latestBlock ? parseRpcNumber(latestBlock.sendCount) : null;
+			const blockHash = latestBlock && typeof latestBlock.hash === "string"
+				? latestBlock.hash
+				: null;
 			let fillPct = null;
 			if (gasUsed !== null && gasLimit !== null && gasLimit > 0n) {
 				// Keep 6 decimals of precision in percent before converting to Number.
@@ -724,12 +756,14 @@
 				ts: new Date().toISOString(),
 				profile: els.networkProfile.value,
 				phase: state.phase,
+				blockHash,
 				l2Block: l2Block ? Number(l2Block) : null,
 				l1Block: l1Block ? Number(l1Block) : null,
 				l1BaseFeeWei: l1BaseFeeWei ? l1BaseFeeWei.toString() : null,
 				l2GasWei: l2GasWei ? l2GasWei.toString() : null,
 				gasUsedMgas,
 				numberOfTransactions: txCount,
+				bridgeSendCount,
 				blockFillPct: fillPct
 			};
 
@@ -840,6 +874,7 @@
 					'<tr class="phase-' + s.phase + '">',
 					'<td>' + formatPhaseLabel(s.phase) + '</td>',
 					'<td>' + time + '</td>',
+					'<td>' + (s.blockHash ?? "-") + '</td>',
 					'<td>' + (s.l2Block ?? "-") + '</td>',
 					'<td>' + (s.l1Block ?? "-") + '</td>',
 					'<td>' + l1FeeGwei + '</td>',
@@ -863,6 +898,7 @@
 				els.mL2Gas.textContent = "-";
 				els.mGasUsed.textContent = "-";
 				els.mTxCount.textContent = "-";
+				els.mBridgeSendCount.textContent = "-";
 				els.mFill.textContent = "-";
 				return;
 			}
@@ -881,6 +917,9 @@
 			els.mTxCount.textContent = typeof latest.numberOfTransactions === "number"
 				? String(latest.numberOfTransactions)
 				: "-";
+			els.mBridgeSendCount.textContent = typeof latest.bridgeSendCount === "number"
+				? String(latest.bridgeSendCount)
+				: "-";
 			els.mFill.textContent = formatFillPct(latest.blockFillPct);
 		}
 
@@ -895,6 +934,7 @@
 			);
 			renderSparkline(els.chartGasUsed, windowSamples, (s) => s.gasUsedMgas);
 			renderSparkline(els.chartTxCount, windowSamples, (s) => s.numberOfTransactions);
+			renderSparkline(els.chartBridge, windowSamples, (s) => s.bridgeSendCount);
 			renderSparkline(els.chartFill, windowSamples, (s) => s.blockFillPct);
 		}
 
@@ -976,12 +1016,14 @@
 				"timestamp",
 				"profile",
 				"phase",
+				"block_hash",
 				"l2_block",
 				"l1_block",
 				"l1_base_fee_wei",
 				"l2_gas_wei",
 				"gas_used_mgas",
 				"number_of_transactions",
+				"l2_to_l1_bridge",
 				"block_fill_pct"
 			].join(",");
 
@@ -990,12 +1032,14 @@
 				s.ts,
 				s.profile,
 				s.phase,
+				s.blockHash ?? "",
 				s.l2Block ?? "",
 				s.l1Block ?? "",
 				s.l1BaseFeeWei ?? "",
 				s.l2GasWei ?? "",
 				s.gasUsedMgas ?? "",
 				s.numberOfTransactions ?? "",
+				s.bridgeSendCount ?? "",
 				s.blockFillPct ?? ""
 			].join(","));
 
