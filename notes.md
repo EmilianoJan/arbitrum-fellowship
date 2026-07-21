@@ -2,7 +2,9 @@
 
 **wei**: Minimal unit of ETH (1 wei = 10^(-18) ETH)
 
+**RPC**: Remote Procedure Call. Protocol in which an application communicates with a blockchain node. 
 
+**EOA**: Externally owned account
 
 # Cheat Sheet
 
