@@ -165,7 +165,6 @@
 						<tr>
 							<th>Phase</th>
 							<th>Time</th>
-							<th>Hash</th>
 							<th>L2 block</th>
 							<th>L1 block</th>
 							<th>L1 fee gwei</th>
@@ -173,6 +172,7 @@
 							<th>Gas used Mgas</th>
 							<th># Transactions</th>
 							<th>Fill %</th>
+                            <th>Hash</th>
 						</tr>
 					</thead>
 					<tbody id="samplesBody"></tbody>
@@ -427,10 +427,38 @@
 			return PHASE_COLORS[sample.phase] || "#0f766e";
 		}
 
-		function renderSparkline(svg, samples, valueSelector) {
+		function formatAxisValue(value, decimals, useCompact) {
+			if (typeof value !== "number" || !Number.isFinite(value)) {
+				return "-";
+			}
+
+			if (useCompact) {
+				const absValue = Math.abs(value);
+				if (absValue >= 1e9) {
+					return (value / 1e9).toFixed(4).replace(/\.00$/, "") + "B";
+				}
+				if (absValue >= 1e6) {
+					return (value / 1e6).toFixed(4).replace(/\.00$/, "") + "M";
+				}
+				if (absValue >= 1e3) {
+					return (value / 1e3).toFixed(4).replace(/\.00$/, "") + "K";
+				}
+			}
+
+			if (decimals === 0) {
+				return String(Math.round(value));
+			}
+
+			return value.toFixed(decimals).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+		}
+
+		function renderSparkline(svg, samples, valueSelector, valueFormatter) {
 			const width = 420;
 			const height = 120;
-			const pad = 10;
+			const plotLeft = 52;
+			const plotRight = 10;
+			const plotTop = 10;
+			const plotBottom = 10;
 			const values = samples
 				.map((s) => valueSelector(s))
 				.filter((v) => typeof v === "number" && Number.isFinite(v));
@@ -442,21 +470,38 @@
 
 			let min = Math.min(...values);
 			let max = Math.max(...values);
-			if (min === max) {
-				min = min - 1;
-				max = max + 1;
-			}
+			if ((min === max) && (min !== 0)) {
+				min = min * 0.99;
+				max = max * 1.01;
+			} else {
+                min = min - 1e-6;
+				max = max + 1e-6;
+            }
 
 			const points = [];
 			const circles = [];
+			const tickCount = 4;
+			const yTicks = [];
+			for (let i = 0; i < tickCount; i += 1) {
+				const ratio = tickCount === 1 ? 0 : i / (tickCount - 1);
+				const tickValue = max - ratio * (max - min);
+				const y = plotTop + ratio * (height - plotTop - plotBottom);
+				yTicks.push(
+					'<line x1="' + plotLeft + '" y1="' + y.toFixed(3) + '" x2="' + (width - plotRight) + '" y2="' + y.toFixed(3) + '" stroke="#edf2ef" stroke-width="1"/>' +
+					'<text x="4" y="' + (y + 3).toFixed(2) + '" fill="#6b7b75" font-size="10" font-family="var(--mono)">' +
+					(valueFormatter ? valueFormatter(tickValue) : formatAxisValue(tickValue, 2, false)) +
+					"</text>"
+				);
+			}
+
 			for (let i = 0; i < samples.length; i += 1) {
 				const sample = samples[i];
 				const value = valueSelector(sample);
 				if (typeof value !== "number" || !Number.isFinite(value)) {
 					continue;
 				}
-				const x = pad + (i / (samples.length - 1 || 1)) * (width - pad * 2);
-				const y = height - pad - ((value - min) / (max - min)) * (height - pad * 2);
+				const x = plotLeft + (i / (samples.length - 1 || 1)) * (width - plotLeft - plotRight);
+				const y = height - plotBottom - ((value - min) / (max - min)) * (height - plotTop - plotBottom);
 				points.push(x.toFixed(2) + "," + y.toFixed(2));
 				circles.push(
 					'<circle cx="' + x.toFixed(2) + '" cy="' + y.toFixed(2) + '" r="2" fill="' + phaseColor(sample) + '" />'
@@ -465,7 +510,8 @@
 
 			svg.innerHTML = [
 				'<rect x="0" y="0" width="420" height="120" fill="#ffffff" />',
-				'<line x1="10" y1="110" x2="410" y2="110" stroke="#d5ded9" stroke-width="1"/>',
+				yTicks.join(""),
+				'<line x1="' + plotLeft + '" y1="' + (height - plotBottom) + '" x2="' + (width - plotRight) + '" y2="' + (height - plotBottom) + '" stroke="#d5ded9" stroke-width="1"/>',
 				'<polyline fill="none" stroke="#0f766e" stroke-width="2" points="' + points.join(" ") + '"/>',
 				circles.join("")
 			].join("");
@@ -518,7 +564,6 @@
 					'<tr class="phase-' + s.phase + '">',
 					'<td>' + formatPhaseLabel(s.phase) + '</td>',
 					'<td>' + time + '</td>',
-					'<td>' + (s.blockHash ?? "-") + '</td>',
 					'<td>' + (s.l2Block ?? "-") + '</td>',
 					'<td>' + (s.l1Block ?? "-") + '</td>',
 					'<td>' + l1FeeGwei + '</td>',
@@ -526,6 +571,7 @@
 					'<td>' + (typeof s.gasUsedMgas === "number" ? s.gasUsedMgas.toFixed(4) : "-") + '</td>',
 					'<td>' + (typeof s.numberOfTransactions === "number" ? s.numberOfTransactions : "-") + '</td>',
 					'<td>' + formatFillPct(s.blockFillPct) + '</td>',
+                    '<td>' + (s.blockHash ?? "-") + '</td>',
 					'</tr>'
 				].join("");
 			}).join("");
@@ -569,17 +615,48 @@
 
 		function renderCharts() {
 			const windowSamples = state.samples.slice(-140);
-			renderSparkline(els.chartL2Block, windowSamples, (s) => s.l2Block);
-			renderSparkline(els.chartL1Block, windowSamples, (s) => s.l1Block);
+			renderSparkline(
+				els.chartL2Block,
+				windowSamples,
+				(s) => s.l2Block,
+				(v) => formatAxisValue(v, 0, true)
+			);
+			renderSparkline(
+				els.chartL1Block,
+				windowSamples,
+				(s) => s.l1Block,
+				(v) => formatAxisValue(v, 0, true)
+			);
 			renderSparkline(
 				els.chartL1Fee,
 				windowSamples,
-				(s) => (s.l1BaseFeeWei ? Number(BigInt(s.l1BaseFeeWei)) / 1e9 : null)
+				(s) => (s.l1BaseFeeWei ? Number(BigInt(s.l1BaseFeeWei)) / 1e9 : null),
+				(v) => formatAxisValue(v, 6, false)
 			);
-			renderSparkline(els.chartGasUsed, windowSamples, (s) => s.gasUsedMgas);
-			renderSparkline(els.chartTxCount, windowSamples, (s) => s.numberOfTransactions);
-			renderSparkline(els.chartBridge, windowSamples, (s) => s.bridgeSendCount);
-			renderSparkline(els.chartFill, windowSamples, (s) => s.blockFillPct);
+			renderSparkline(
+				els.chartGasUsed,
+				windowSamples,
+				(s) => s.gasUsedMgas,
+				(v) => formatAxisValue(v, 4, false)
+			);
+			renderSparkline(
+				els.chartTxCount,
+				windowSamples,
+				(s) => s.numberOfTransactions,
+				(v) => formatAxisValue(v, 0, false)
+			);
+			renderSparkline(
+				els.chartBridge,
+				windowSamples,
+				(s) => s.bridgeSendCount,
+				(v) => formatAxisValue(v, 0, false)
+			);
+			renderSparkline(
+				els.chartFill,
+				windowSamples,
+				(s) => s.blockFillPct,
+				(v) => formatFillPct(v)
+			);
 		}
 
 		function render() {
