@@ -153,7 +153,7 @@
 
 		.metrics {
 			display: grid;
-			grid-template-columns: repeat(6, minmax(130px, 1fr));
+			grid-template-columns: repeat(7, minmax(130px, 1fr));
 			gap: 10px;
 		}
 
@@ -459,6 +459,10 @@
 					<div class="value" id="mGasUsed">-</div>
 				</div>
 				<div class="metric">
+					<div class="name">Number of Transactions</div>
+					<div class="value" id="mTxCount">-</div>
+				</div>
+				<div class="metric">
 					<div class="name">Block fill (%)</div>
 					<div class="value" id="mFill">-</div>
 				</div>
@@ -485,6 +489,10 @@
 					<svg id="chartGasUsed" class="spark" viewBox="0 0 420 120"></svg>
 				</article>
 				<article class="chart-card">
+					<h3 class="chart-title">Number of Transactions</h3>
+					<svg id="chartTxCount" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
 					<h3 class="chart-title">Block fill (%)</h3>
 					<svg id="chartFill" class="spark" viewBox="0 0 420 120"></svg>
 				</article>
@@ -509,6 +517,7 @@
 							<th>L1 fee gwei</th>
 							<th>L2 gas gwei</th>
 							<th>Gas used Mgas</th>
+							<th># Transactions</th>
 							<th>Fill %</th>
 						</tr>
 					</thead>
@@ -575,11 +584,13 @@
 			mL1Fee: document.getElementById("mL1Fee"),
 			mL2Gas: document.getElementById("mL2Gas"),
 			mGasUsed: document.getElementById("mGasUsed"),
+			mTxCount: document.getElementById("mTxCount"),
 			mFill: document.getElementById("mFill"),
 			chartL2Block: document.getElementById("chartL2Block"),
 			chartL1Block: document.getElementById("chartL1Block"),
 			chartL1Fee: document.getElementById("chartL1Fee"),
 			chartGasUsed: document.getElementById("chartGasUsed"),
+			chartTxCount: document.getElementById("chartTxCount"),
 			chartFill: document.getElementById("chartFill"),
 			phaseSummary: document.getElementById("phaseSummary"),
 			samplesBody: document.getElementById("samplesBody")
@@ -657,6 +668,22 @@
 			return String(phase || "").toUpperCase();
 		}
 
+		function formatFillPct(value) {
+			if (typeof value !== "number" || !Number.isFinite(value)) {
+				return "-";
+			}
+			if (value === 0) {
+				return "0.0000";
+			}
+			if (value < 0.0001) {
+				return value.toExponential(2);
+			}
+			if (value < 1) {
+				return value.toFixed(4);
+			}
+			return value.toFixed(2);
+		}
+
 		async function pollOnce() {
 			const l2Rpc = els.l2Rpc.value.trim();
 			const l1Rpc = els.l1Rpc.value.trim();
@@ -675,10 +702,13 @@
 			const l2GasWei = hexToBigInt(l2GasHex);
 			const gasUsed = latestBlock ? hexToBigInt(latestBlock.gasUsed) : null;
 			const gasLimit = latestBlock ? hexToBigInt(latestBlock.gasLimit) : null;
-
+			const txCount = latestBlock && Array.isArray(latestBlock.transactions)
+				? latestBlock.transactions.length
+				: null;
 			let fillPct = null;
 			if (gasUsed !== null && gasLimit !== null && gasLimit > 0n) {
-				fillPct = Number((gasUsed * 10000n) / gasLimit) / 100;
+				// Keep 6 decimals of precision in percent before converting to Number.
+				fillPct = Number((gasUsed * 100000000n) / gasLimit) / 1000000;
 			}
 
 			const gasUsedMgas = gasUsed !== null ? Number(gasUsed) / 1e6 : null;
@@ -693,6 +723,7 @@
 				l1BaseFeeWei: l1BaseFeeWei ? l1BaseFeeWei.toString() : null,
 				l2GasWei: l2GasWei ? l2GasWei.toString() : null,
 				gasUsedMgas,
+				numberOfTransactions: txCount,
 				blockFillPct: fillPct
 			};
 
@@ -783,7 +814,7 @@
 					'<article class="summary-box">',
 					'<h3 style="color:' + PHASE_COLORS[phase] + ';">' + formatPhaseLabel(phase) + '</h3>',
 					'<p>Samples: ' + list.length + '</p>',
-					'<p>Avg fill: ' + (avgFill === null ? "-" : avgFill.toFixed(2) + "%") + '</p>',
+					'<p>Avg fill: ' + (avgFill === null ? "-" : formatFillPct(avgFill) + "%") + '</p>',
 					'<p>Avg L2 gas: ' + (avgL2GasGwei === null ? "-" : avgL2GasGwei.toFixed(6) + " gwei") + '</p>',
 					'<p>Avg L1 fee: ' + (avgL1FeeGwei === null ? "-" : avgL1FeeGwei.toFixed(6) + " gwei") + '</p>',
 					'</article>'
@@ -808,7 +839,8 @@
 					'<td>' + l1FeeGwei + '</td>',
 					'<td>' + l2GasGwei + '</td>',
 					'<td>' + (typeof s.gasUsedMgas === "number" ? s.gasUsedMgas.toFixed(4) : "-") + '</td>',
-					'<td>' + (typeof s.blockFillPct === "number" ? s.blockFillPct.toFixed(2) : "-") + '</td>',
+					'<td>' + (typeof s.numberOfTransactions === "number" ? s.numberOfTransactions : "-") + '</td>',
+					'<td>' + formatFillPct(s.blockFillPct) + '</td>',
 					'</tr>'
 				].join("");
 			}).join("");
@@ -824,6 +856,7 @@
 				els.mL1Fee.textContent = "-";
 				els.mL2Gas.textContent = "-";
 				els.mGasUsed.textContent = "-";
+				els.mTxCount.textContent = "-";
 				els.mFill.textContent = "-";
 				return;
 			}
@@ -839,9 +872,10 @@
 			els.mGasUsed.textContent = typeof latest.gasUsedMgas === "number"
 				? latest.gasUsedMgas.toFixed(4)
 				: "-";
-			els.mFill.textContent = typeof latest.blockFillPct === "number"
-				? latest.blockFillPct.toFixed(2)
+			els.mTxCount.textContent = typeof latest.numberOfTransactions === "number"
+				? String(latest.numberOfTransactions)
 				: "-";
+			els.mFill.textContent = formatFillPct(latest.blockFillPct);
 		}
 
 		function renderCharts() {
@@ -854,6 +888,7 @@
 				(s) => (s.l1BaseFeeWei ? Number(BigInt(s.l1BaseFeeWei)) / 1e9 : null)
 			);
 			renderSparkline(els.chartGasUsed, windowSamples, (s) => s.gasUsedMgas);
+			renderSparkline(els.chartTxCount, windowSamples, (s) => s.numberOfTransactions);
 			renderSparkline(els.chartFill, windowSamples, (s) => s.blockFillPct);
 		}
 
@@ -940,6 +975,7 @@
 				"l1_base_fee_wei",
 				"l2_gas_wei",
 				"gas_used_mgas",
+				"number_of_transactions",
 				"block_fill_pct"
 			].join(",");
 
@@ -953,6 +989,7 @@
 				s.l1BaseFeeWei ?? "",
 				s.l2GasWei ?? "",
 				s.gasUsedMgas ?? "",
+				s.numberOfTransactions ?? "",
 				s.blockFillPct ?? ""
 			].join(","));
 
