@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Nitro Chain Monitor</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+	<div class="wrap">
+		<section class="hero">
+			<h1>Nitro Chain Monitor</h1>
+			<p>
+				Monitor L2 blocks, L1 blocks, base fee, gas price, and block fill in real time.
+				Includes Local/Sepolia switching and phase tagging for before/during/after.
+			</p>
+		</section>
+
+		<section class="panel grid">
+			<h2>1) Configuration and Controls</h2>
+			<div class="controls">
+				<div class="field" style="grid-column: span 2;">
+					<label for="networkProfile">Profile</label>
+					<select id="networkProfile">
+						<option value="local">Local Nitro testnode</option>
+						<option value="sepolia">Arbitrum Sepolia</option>
+                        <option value="mainnet">Arbitrum One (Mainnet)</option>
+						<option value="custom">Custom</option>
+					</select>
+				</div>
+
+				<div class="field" style="grid-column: span 4;">
+					<label for="l2Rpc">L2 RPC</label>
+					<input id="l2Rpc" type="text" value="http://127.0.0.1:8547" />
+				</div>
+
+				<div class="field" style="grid-column: span 4;">
+					<label for="l1Rpc">L1 RPC</label>
+					<input id="l1Rpc" type="text" value="http://127.0.0.1:8545" />
+				</div>
+
+				<div class="field" style="grid-column: span 2;">
+					<label for="pollMs">Polling (ms)</label>
+					<input id="pollMs" type="number" min="100" value="1000" />
+				</div>
+
+				<div class="field" style="grid-column: span 2;">
+					<button id="applyProfile" class="btn-light">Apply Profile</button>
+				</div>
+				<div class="field" style="grid-column: span 2;">
+					<button id="startBtn" class="btn-primary">Start Monitor</button>
+				</div>
+				<div class="field" style="grid-column: span 2;">
+					<button id="stopBtn" class="btn-danger">Stop</button>
+				</div>
+				<div class="field" style="grid-column: span 2;">
+					<button id="clearBtn" class="btn-light">Clear Data</button>
+				</div>
+				<div class="field" style="grid-column: span 2;">
+					<button id="jsonBtn" class="btn-light">Download JSON</button>
+				</div>
+				<div class="field" style="grid-column: span 2;">
+					<button id="csvBtn" class="btn-light">Download CSV</button>
+				</div>
+			</div>
+
+			<div>
+				<strong>Current phase:</strong>
+				<div id="phaseControls" class="phase-controls" style="margin-top: 8px;">
+					<button class="phase-chip active" data-phase="before">BEFORE</button>
+					<button class="phase-chip" data-phase="during">DURING</button>
+					<button class="phase-chip" data-phase="after">AFTER</button>
+				</div>
+			</div>
+
+			<div id="status" class="status">Status: idle</div>
+			<p class="small-note">
+				Recommended: keep phase on BEFORE, start the monitor, run your workload,
+				switch to DURING while load is active, and then to AFTER when it ends.
+			</p>
+		</section>
+
+		<section class="panel grid">
+			<h2>2) Live Metrics</h2>
+			<div class="metrics">
+				<div class="metric">
+					<div class="name">L2 block number</div>
+					<div class="value" id="mL2Block">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">L1 block number</div>
+					<div class="value" id="mL1Block">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">L1 base fee (gwei)</div>
+					<div class="value" id="mL1Fee">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">L2 gas price (gwei)</div>
+					<div class="value" id="mL2Gas">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">Gas used per block (Mgas)</div>
+					<div class="value" id="mGasUsed">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">Number of Transactions</div>
+					<div class="value" id="mTxCount">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">L2 to L1 bridge</div>
+					<div class="value" id="mBridgeSendCount">-</div>
+				</div>
+				<div class="metric">
+					<div class="name">Block fill (%)</div>
+					<div class="value" id="mFill">-</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="panel grid">
+			<h2>3) Timeline</h2>
+			<div class="charts">
+				<article class="chart-card">
+					<h3 class="chart-title">L2 block number</h3>
+					<svg id="chartL2Block" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">L1 block number</h3>
+					<svg id="chartL1Block" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">L1 base fee (gwei)</h3>
+					<svg id="chartL1Fee" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">Gas used per block (Mgas)</h3>
+					<svg id="chartGasUsed" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">Number of Transactions</h3>
+					<svg id="chartTxCount" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">L2 to L1 bridge</h3>
+					<svg id="chartBridge" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+				<article class="chart-card">
+					<h3 class="chart-title">Block fill (%)</h3>
+					<svg id="chartFill" class="spark" viewBox="0 0 420 120"></svg>
+				</article>
+			</div>
+		</section>
+
+		<section class="panel grid">
+			<h2>4) Summary by Phase</h2>
+			<div class="summary" id="phaseSummary"></div>
+		</section>
+
+		<section class="panel grid">
+			<h2>5) Recent Samples</h2>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Phase</th>
+							<th>Time</th>
+							<th>L2 block</th>
+							<th>L1 block</th>
+							<th>L1 fee gwei</th>
+							<th>L2 gas gwei</th>
+							<th>Gas used Mgas</th>
+							<th># Transactions</th>
+							<th>Fill %</th>
+                            <th>Hash</th>
+						</tr>
+					</thead>
+					<tbody id="samplesBody"></tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+
+	<script>
+		const PRECOMPILES = {
+			arbSys: "0x0000000000000000000000000000000000000064",
+			arbGasInfo: "0x000000000000000000000000000000000000006c"
+		};
+
+		const SELECTORS = {
+			arbBlockNumber: "0xa3b1b31d",
+			getL1BaseFeeEstimate: "0xf5d6ded7",
+			getMinimumGasPrice: "0xf918379a"
+		};
+
+		const PROFILES = {
+			local: {
+				name: "Local Nitro testnode",
+				l2Rpc: "http://127.0.0.1:8547",
+				l1Rpc: "http://127.0.0.1:8545"
+			},
+			sepolia: {
+				name: "Arbitrum Sepolia",
+				l2Rpc: "https://sepolia-rollup.arbitrum.io/rpc",
+				l1Rpc: "https://ethereum-sepolia-rpc.publicnode.com"
+			},
+            mainnet: {
+				name: "Arbitrum One (Mainnet)",
+				l2Rpc: "https://arb1.arbitrum.io/rpc",
+				l1Rpc: "https://ethereum-rpc.publicnode.com"
+			}
+		};
+
+		const PHASE_COLORS = {
+			before: "#1d4ed8",
+			during: "#c2410c",
+			after: "#15803d"
+		};
+
+		const state = {
+			timer: null,
+			phase: "before",
+			samples: [],
+			maxSamples: 2000,
+			seq: 1
+		};
+
+		const els = {
+			networkProfile: document.getElementById("networkProfile"),
+			l2Rpc: document.getElementById("l2Rpc"),
+			l1Rpc: document.getElementById("l1Rpc"),
+			pollMs: document.getElementById("pollMs"),
+			applyProfile: document.getElementById("applyProfile"),
+			startBtn: document.getElementById("startBtn"),
+			stopBtn: document.getElementById("stopBtn"),
+			clearBtn: document.getElementById("clearBtn"),
+			jsonBtn: document.getElementById("jsonBtn"),
+			csvBtn: document.getElementById("csvBtn"),
+			phaseControls: document.getElementById("phaseControls"),
+			status: document.getElementById("status"),
+			mL2Block: document.getElementById("mL2Block"),
+			mL1Block: document.getElementById("mL1Block"),
+			mL1Fee: document.getElementById("mL1Fee"),
+			mL2Gas: document.getElementById("mL2Gas"),
+			mGasUsed: document.getElementById("mGasUsed"),
+			mTxCount: document.getElementById("mTxCount"),
+			mBridgeSendCount: document.getElementById("mBridgeSendCount"),
+			mFill: document.getElementById("mFill"),
+			chartL2Block: document.getElementById("chartL2Block"),
+			chartL1Block: document.getElementById("chartL1Block"),
+			chartL1Fee: document.getElementById("chartL1Fee"),
+			chartGasUsed: document.getElementById("chartGasUsed"),
+			chartTxCount: document.getElementById("chartTxCount"),
+			chartBridge: document.getElementById("chartBridge"),
+			chartFill: document.getElementById("chartFill"),
+			phaseSummary: document.getElementById("phaseSummary"),
+			samplesBody: document.getElementById("samplesBody")
+		};
+
+		function parseRpcNumber(value) {
+			if (value === null || value === undefined) {
+				return null;
+			}
+			if (typeof value === "number") {
+				return Number.isFinite(value) ? value : null;
+			}
+			if (typeof value === "string") {
+				if (value.startsWith("0x") || value.startsWith("0X")) {
+					return Number(BigInt(value));
+				}
+				const parsed = Number(value);
+				return Number.isFinite(parsed) ? parsed : null;
+			}
+			return null;
+		}
+
+		function setStatus(text, mode) {
+			els.status.textContent = "Status: " + text;
+			els.status.classList.remove("ok", "err");
+			if (mode === "ok") {
+				els.status.classList.add("ok");
+			}
+			if (mode === "err") {
+				els.status.classList.add("err");
+			}
+		}
+
+		function applyProfile(name) {
+			if (name === "custom") {
+				return;
+			}
+			const p = PROFILES[name];
+			if (!p) {
+				return;
+			}
+			els.l2Rpc.value = p.l2Rpc;
+			els.l1Rpc.value = p.l1Rpc;
+		}
+
+		function rpcCall(url, method, params) {
+			return fetch(url, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: Date.now(),
+					method,
+					params: params || []
+				})
+			}).then(async (res) => {
+				if (!res.ok) {
+					throw new Error("HTTP " + res.status + " on " + url);
+				}
+				const payload = await res.json();
+				if (payload.error) {
+					throw new Error(payload.error.message || "RPC error");
+				}
+				return payload.result;
+			});
+		}
+
+		function hexToBigInt(hexValue) {
+			if (!hexValue) {
+				return null;
+			}
+			return BigInt(hexValue);
+		}
+
+		function formatUnits(value, decimals, fixed) {
+			if (value === null || value === undefined) {
+				return "-";
+			}
+			const base = 10n ** BigInt(decimals);
+			const whole = value / base;
+			const fraction = value % base;
+			if (fixed === 0) {
+				return whole.toString();
+			}
+
+			let fracString = fraction.toString().padStart(decimals, "0");
+			fracString = fracString.slice(0, fixed).replace(/0+$/, "");
+			return fracString.length > 0 ? whole.toString() + "." + fracString : whole.toString();
+		}
+
+		function formatPhaseLabel(phase) {
+			return String(phase || "").toUpperCase();
+		}
+
+		function formatFillPct(value) {
+			if (typeof value !== "number" || !Number.isFinite(value)) {
+				return "-";
+			}
+			if (value === 0) {
+				return "0.0000";
+			}
+			if (value < 0.0001) {
+				return value.toExponential(2);
+			}
+			if (value < 1) {
+				return value.toFixed(4);
+			}
+			return value.toFixed(2);
+		}
+
+		async function pollOnce() {
+			const l2Rpc = els.l2Rpc.value.trim();
+			const l1Rpc = els.l1Rpc.value.trim();
+
+			const [l2BlockHex, l1BlockHex, l1FeeHex, l2GasHex, latestBlock] = await Promise.all([
+				rpcCall(l2Rpc, "eth_call", [{ to: PRECOMPILES.arbSys, data: SELECTORS.arbBlockNumber }, "latest"]),
+				rpcCall(l1Rpc, "eth_blockNumber", []),
+				rpcCall(l2Rpc, "eth_call", [{ to: PRECOMPILES.arbGasInfo, data: SELECTORS.getL1BaseFeeEstimate }, "latest"]),
+				rpcCall(l2Rpc, "eth_call", [{ to: PRECOMPILES.arbGasInfo, data: SELECTORS.getMinimumGasPrice }, "latest"]),
+				rpcCall(l2Rpc, "eth_getBlockByNumber", ["latest", false])
+			]);
+
+			const l2Block = hexToBigInt(l2BlockHex);
+			const l1Block = hexToBigInt(l1BlockHex);
+			const l1BaseFeeWei = hexToBigInt(l1FeeHex);
+			const l2GasWei = hexToBigInt(l2GasHex);
+			const gasUsed = latestBlock ? hexToBigInt(latestBlock.gasUsed) : null;
+			const gasLimit = latestBlock ? hexToBigInt(latestBlock.gasLimit) : null;
+			const txCount = latestBlock && Array.isArray(latestBlock.transactions)
+				? latestBlock.transactions.length
+				: null;
+			const bridgeSendCount = latestBlock ? parseRpcNumber(latestBlock.sendCount) : null;
+			const blockHash = latestBlock && typeof latestBlock.hash === "string"
+				? latestBlock.hash
+				: null;
+			let fillPct = null;
+			if (gasUsed !== null && gasLimit !== null && gasLimit > 0n) {
+				// Keep 6 decimals of precision in percent before converting to Number.
+				fillPct = Number((gasUsed * 100000000n) / gasLimit) / 1000000;
+			}
+
+			const gasUsedMgas = gasUsed !== null ? Number(gasUsed) / 1e6 : null;
+
+			const sample = {
+				id: state.seq++,
+				ts: new Date().toISOString(),
+				profile: els.networkProfile.value,
+				phase: state.phase,
+				blockHash,
+				l2Block: l2Block ? Number(l2Block) : null,
+				l1Block: l1Block ? Number(l1Block) : null,
+				l1BaseFeeWei: l1BaseFeeWei ? l1BaseFeeWei.toString() : null,
+				l2GasWei: l2GasWei ? l2GasWei.toString() : null,
+				gasUsedMgas,
+				numberOfTransactions: txCount,
+				bridgeSendCount,
+				blockFillPct: fillPct
+			};
+
+			state.samples.push(sample);
+			if (state.samples.length > state.maxSamples) {
+				state.samples = state.samples.slice(state.samples.length - state.maxSamples);
+			}
+
+			render();
+			setStatus(
+				"ok | " + sample.ts + " | samples: " + state.samples.length + " | phase: " + formatPhaseLabel(state.phase),
+				"ok"
+			);
+		}
+
+		function phaseColor(sample) {
+			return PHASE_COLORS[sample.phase] || "#0f766e";
+		}
+
+		function formatAxisValue(value, decimals, useCompact) {
+			if (typeof value !== "number" || !Number.isFinite(value)) {
+				return "-";
+			}
+
+			if (useCompact) {
+				const absValue = Math.abs(value);
+				if (absValue >= 1e9) {
+					return (value / 1e9).toFixed(4).replace(/\.00$/, "") + "B";
+				}
+				if (absValue >= 1e6) {
+					return (value / 1e6).toFixed(4).replace(/\.00$/, "") + "M";
+				}
+				if (absValue >= 1e3) {
+					return (value / 1e3).toFixed(4).replace(/\.00$/, "") + "K";
+				}
+			}
+
+			if (decimals === 0) {
+				return String(Math.round(value));
+			}
+
+			return value.toFixed(decimals).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+		}
+
+		function renderSparkline(svg, samples, valueSelector, valueFormatter) {
+			const width = 420;
+			const height = 120;
+			const plotLeft = 52;
+			const plotRight = 10;
+			const plotTop = 10;
+			const plotBottom = 10;
+			const values = samples
+				.map((s) => valueSelector(s))
+				.filter((v) => typeof v === "number" && Number.isFinite(v));
+
+			if (values.length < 2) {
+				svg.innerHTML = "";
+				return;
+			}
+
+			let min = Math.min(...values);
+			let max = Math.max(...values);
+			if ((min === max) && (min !== 0)) {
+				min = min * 0.99;
+				max = max * 1.01;
+			} else {
+                min = min - 1e-6;
+				max = max + 1e-6;
+            }
+
+			const points = [];
+			const circles = [];
+			const tickCount = 4;
+			const yTicks = [];
+			for (let i = 0; i < tickCount; i += 1) {
+				const ratio = tickCount === 1 ? 0 : i / (tickCount - 1);
+				const tickValue = max - ratio * (max - min);
+				const y = plotTop + ratio * (height - plotTop - plotBottom);
+				yTicks.push(
+					'<line x1="' + plotLeft + '" y1="' + y.toFixed(3) + '" x2="' + (width - plotRight) + '" y2="' + y.toFixed(3) + '" stroke="#edf2ef" stroke-width="1"/>' +
+					'<text x="4" y="' + (y + 3).toFixed(2) + '" fill="#6b7b75" font-size="10" font-family="var(--mono)">' +
+					(valueFormatter ? valueFormatter(tickValue) : formatAxisValue(tickValue, 2, false)) +
+					"</text>"
+				);
+			}
+
+			for (let i = 0; i < samples.length; i += 1) {
+				const sample = samples[i];
+				const value = valueSelector(sample);
+				if (typeof value !== "number" || !Number.isFinite(value)) {
+					continue;
+				}
+				const x = plotLeft + (i / (samples.length - 1 || 1)) * (width - plotLeft - plotRight);
+				const y = height - plotBottom - ((value - min) / (max - min)) * (height - plotTop - plotBottom);
+				points.push(x.toFixed(2) + "," + y.toFixed(2));
+				circles.push(
+					'<circle cx="' + x.toFixed(2) + '" cy="' + y.toFixed(2) + '" r="2" fill="' + phaseColor(sample) + '" />'
+				);
+			}
+
+			svg.innerHTML = [
+				'<rect x="0" y="0" width="420" height="120" fill="#ffffff" />',
+				yTicks.join(""),
+				'<line x1="' + plotLeft + '" y1="' + (height - plotBottom) + '" x2="' + (width - plotRight) + '" y2="' + (height - plotBottom) + '" stroke="#d5ded9" stroke-width="1"/>',
+				'<polyline fill="none" stroke="#0f766e" stroke-width="2" points="' + points.join(" ") + '"/>',
+				circles.join("")
+			].join("");
+		}
+
+		function renderSummary() {
+			const groups = {
+				before: state.samples.filter((s) => s.phase === "before"),
+				during: state.samples.filter((s) => s.phase === "during"),
+				after: state.samples.filter((s) => s.phase === "after")
+			};
+
+			function avg(arr, key) {
+				const nums = arr.map((x) => x[key]).filter((v) => typeof v === "number" && Number.isFinite(v));
+				if (nums.length === 0) {
+					return null;
+				}
+				return nums.reduce((a, b) => a + b, 0) / nums.length;
+			}
+
+			const html = Object.keys(groups).map((phase) => {
+				const list = groups[phase];
+				const avgFill = avg(list, "blockFillPct");
+				const avgL2GasWei = avg(list.map((x) => ({ v: x.l2GasWei ? Number(BigInt(x.l2GasWei)) : null })), "v");
+				const avgL1FeeWei = avg(list.map((x) => ({ v: x.l1BaseFeeWei ? Number(BigInt(x.l1BaseFeeWei)) : null })), "v");
+				const avgL2GasGwei = avgL2GasWei ? avgL2GasWei / 1e9 : null;
+				const avgL1FeeGwei = avgL1FeeWei ? avgL1FeeWei / 1e9 : null;
+
+				return [
+					'<article class="summary-box">',
+					'<h3 style="color:' + PHASE_COLORS[phase] + ';">' + formatPhaseLabel(phase) + '</h3>',
+					'<p>Samples: ' + list.length + '</p>',
+					'<p>Avg fill: ' + (avgFill === null ? "-" : formatFillPct(avgFill) + "%") + '</p>',
+					'<p>Avg L2 gas: ' + (avgL2GasGwei === null ? "-" : avgL2GasGwei.toFixed(6) + " gwei") + '</p>',
+					'<p>Avg L1 fee: ' + (avgL1FeeGwei === null ? "-" : avgL1FeeGwei.toFixed(6) + " gwei") + '</p>',
+					'</article>'
+				].join("");
+			}).join("");
+
+			els.phaseSummary.innerHTML = html;
+		}
+
+		function renderTable() {
+			const rows = state.samples.slice(-180).reverse().map((s) => {
+				const l1FeeGwei = s.l1BaseFeeWei ? (Number(BigInt(s.l1BaseFeeWei)) / 1e9).toFixed(6) : "-";
+				const l2GasGwei = s.l2GasWei ? (Number(BigInt(s.l2GasWei)) / 1e9).toFixed(6) : "-";
+				const time = s.ts.slice(11, 19);
+
+				return [
+					'<tr class="phase-' + s.phase + '">',
+					'<td>' + formatPhaseLabel(s.phase) + '</td>',
+					'<td>' + time + '</td>',
+					'<td>' + (s.l2Block ?? "-") + '</td>',
+					'<td>' + (s.l1Block ?? "-") + '</td>',
+					'<td>' + l1FeeGwei + '</td>',
+					'<td>' + l2GasGwei + '</td>',
+					'<td>' + (typeof s.gasUsedMgas === "number" ? s.gasUsedMgas.toFixed(4) : "-") + '</td>',
+					'<td>' + (typeof s.numberOfTransactions === "number" ? s.numberOfTransactions : "-") + '</td>',
+					'<td>' + formatFillPct(s.blockFillPct) + '</td>',
+                    '<td>' + (s.blockHash ?? "-") + '</td>',
+					'</tr>'
+				].join("");
+			}).join("");
+
+			els.samplesBody.innerHTML = rows;
+		}
+
+		function renderMetrics() {
+			const latest = state.samples[state.samples.length - 1];
+			if (!latest) {
+				els.mL2Block.textContent = "-";
+				els.mL1Block.textContent = "-";
+				els.mL1Fee.textContent = "-";
+				els.mL2Gas.textContent = "-";
+				els.mGasUsed.textContent = "-";
+				els.mTxCount.textContent = "-";
+				els.mBridgeSendCount.textContent = "-";
+				els.mFill.textContent = "-";
+				return;
+			}
+
+			els.mL2Block.textContent = latest.l2Block ?? "-";
+			els.mL1Block.textContent = latest.l1Block ?? "-";
+			els.mL1Fee.textContent = latest.l1BaseFeeWei
+				? formatUnits(BigInt(latest.l1BaseFeeWei), 9, 6)
+				: "-";
+			els.mL2Gas.textContent = latest.l2GasWei
+				? formatUnits(BigInt(latest.l2GasWei), 9, 6)
+				: "-";
+			els.mGasUsed.textContent = typeof latest.gasUsedMgas === "number"
+				? latest.gasUsedMgas.toFixed(4)
+				: "-";
+			els.mTxCount.textContent = typeof latest.numberOfTransactions === "number"
+				? String(latest.numberOfTransactions)
+				: "-";
+			els.mBridgeSendCount.textContent = typeof latest.bridgeSendCount === "number"
+				? String(latest.bridgeSendCount)
+				: "-";
+			els.mFill.textContent = formatFillPct(latest.blockFillPct);
+		}
+
+		function renderCharts() {
+			const windowSamples = state.samples.slice(-140);
+			renderSparkline(
+				els.chartL2Block,
+				windowSamples,
+				(s) => s.l2Block,
+				(v) => formatAxisValue(v, 0, true)
+			);
+			renderSparkline(
+				els.chartL1Block,
+				windowSamples,
+				(s) => s.l1Block,
+				(v) => formatAxisValue(v, 0, true)
+			);
+			renderSparkline(
+				els.chartL1Fee,
+				windowSamples,
+				(s) => (s.l1BaseFeeWei ? Number(BigInt(s.l1BaseFeeWei)) / 1e9 : null),
+				(v) => formatAxisValue(v, 6, false)
+			);
+			renderSparkline(
+				els.chartGasUsed,
+				windowSamples,
+				(s) => s.gasUsedMgas,
+				(v) => formatAxisValue(v, 4, false)
+			);
+			renderSparkline(
+				els.chartTxCount,
+				windowSamples,
+				(s) => s.numberOfTransactions,
+				(v) => formatAxisValue(v, 0, false)
+			);
+			renderSparkline(
+				els.chartBridge,
+				windowSamples,
+				(s) => s.bridgeSendCount,
+				(v) => formatAxisValue(v, 0, false)
+			);
+			renderSparkline(
+				els.chartFill,
+				windowSamples,
+				(s) => s.blockFillPct,
+				(v) => formatFillPct(v)
+			);
+		}
+
+		function render() {
+			renderMetrics();
+			renderCharts();
+			renderSummary();
+			renderTable();
+		}
+
+		function startMonitor() {
+			if (state.timer) {
+				return;
+			}
+			const pollMs = Math.max(100, Number(els.pollMs.value) || 1000);
+			setStatus("starting...", "ok");
+
+			pollOnce().catch((err) => {
+				setStatus("initial error: " + err.message, "err");
+			});
+
+			state.timer = setInterval(() => {
+				pollOnce().catch((err) => {
+					setStatus("polling error: " + err.message, "err");
+				});
+			}, pollMs);
+		}
+
+		function stopMonitor() {
+			if (!state.timer) {
+				return;
+			}
+			clearInterval(state.timer);
+			state.timer = null;
+			setStatus("stopped", "ok");
+		}
+
+		function clearData() {
+			state.samples = [];
+			state.seq = 1;
+			render();
+			setStatus("data cleared", "ok");
+		}
+
+		function setPhase(phase) {
+			state.phase = phase;
+			const chips = els.phaseControls.querySelectorAll(".phase-chip");
+			chips.forEach((chip) => {
+				chip.classList.toggle("active", chip.dataset.phase === phase);
+			});
+			setStatus("phase changed to " + formatPhaseLabel(phase), "ok");
+		}
+
+		function downloadFile(filename, content, contentType) {
+			const blob = new Blob([content], { type: contentType });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+
+		function exportJson() {
+			const payload = {
+				exportedAt: new Date().toISOString(),
+				profile: els.networkProfile.value,
+				l2Rpc: els.l2Rpc.value.trim(),
+				l1Rpc: els.l1Rpc.value.trim(),
+				pollMs: Number(els.pollMs.value) || 3000,
+				samples: state.samples
+			};
+			downloadFile("nitro-monitor-samples.json", JSON.stringify(payload, null, 2), "application/json");
+		}
+
+		function exportCsv() {
+			const head = [
+				"id",
+				"timestamp",
+				"profile",
+				"phase",
+				"block_hash",
+				"l2_block",
+				"l1_block",
+				"l1_base_fee_wei",
+				"l2_gas_wei",
+				"gas_used_mgas",
+				"number_of_transactions",
+				"l2_to_l1_bridge",
+				"block_fill_pct"
+			].join(",");
+
+			const lines = state.samples.map((s) => [
+				s.id,
+				s.ts,
+				s.profile,
+				s.phase,
+				s.blockHash ?? "",
+				s.l2Block ?? "",
+				s.l1Block ?? "",
+				s.l1BaseFeeWei ?? "",
+				s.l2GasWei ?? "",
+				s.gasUsedMgas ?? "",
+				s.numberOfTransactions ?? "",
+				s.bridgeSendCount ?? "",
+				s.blockFillPct ?? ""
+			].join(","));
+
+			downloadFile("nitro-monitor-samples.csv", [head, ...lines].join("\n"), "text/csv;charset=utf-8;");
+		}
+
+		els.networkProfile.addEventListener("change", (event) => {
+			applyProfile(event.target.value);
+		});
+
+		els.applyProfile.addEventListener("click", () => {
+			applyProfile(els.networkProfile.value);
+			setStatus("profile applied", "ok");
+		});
+
+		els.startBtn.addEventListener("click", startMonitor);
+		els.stopBtn.addEventListener("click", stopMonitor);
+		els.clearBtn.addEventListener("click", clearData);
+		els.jsonBtn.addEventListener("click", exportJson);
+		els.csvBtn.addEventListener("click", exportCsv);
+
+		els.phaseControls.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) {
+				return;
+			}
+			if (!target.classList.contains("phase-chip")) {
+				return;
+			}
+			const phase = target.dataset.phase;
+			if (!phase) {
+				return;
+			}
+			setPhase(phase);
+		});
+
+		setPhase("before");
+		render();
+	</script>
+</body>
+</html>
