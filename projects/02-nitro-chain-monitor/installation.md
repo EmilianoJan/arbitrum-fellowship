@@ -14,3 +14,5 @@ sudo ./test-node.bash --init
 initialization after installation
 sudo ./test-node.bash
 
+# Start monitor
+
